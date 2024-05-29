@@ -12,6 +12,11 @@ if((CMAKE_COMPILER_IS_GNUCXX OR OV_COMPILER_IS_CLANG) AND CMAKE_CXX_STANDARD GRE
     set(CMAKE_CXX_FLAGS "-Wno-error=deprecated ${CMAKE_CXX_FLAGS}")
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # C4267, 4244 issues from oneDNN headers conversion from 'XXX' to 'YYY', possible loss of data
     ov_add_compiler_flags(/wd4018)
@@ -116,7 +121,8 @@ if(OV_CPU_WITH_ACL)
     set(CMAKE_CXX_STANDARD 14)
 endif()
 
-file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+                          ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
                           ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp)
 
@@ -170,6 +176,11 @@ ov_add_plugin(NAME ${TARGET_NAME}
               AS_EXTENSION
               VERSION_DEFINES_FOR src/plugin.cpp
               SOURCES ${SOURCES} ${HEADERS})
+
+# Test
+include_directories(${PERFETTO_SDK_DIR})
+add_library(perfetto STATIC ${PERFETTO_SDK_DIR}/perfetto.cc)
+target_link_libraries(${TARGET_NAME} PRIVATE perfetto ${CMAKE_THREAD_LIBS_INIT})
 
 # give a different file name depending on target platform architecture
 if(ARM OR AARCH64)
