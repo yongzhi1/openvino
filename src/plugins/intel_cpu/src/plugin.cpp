@@ -17,6 +17,9 @@
 #include "utils/denormals.hpp"
 #include "utils/precision_support.h"
 #include "weights_cache.hpp"
+// Test
+#include "trace_categories.h"
+
 
 #if defined(__linux__)
 #    include <signal.h>
@@ -123,7 +126,22 @@ public:
 };
 #endif  // __linux__
 
+// Test
+void InitializePerfetto() {
+  perfetto::TracingInitArgs args;
+  // The backends determine where trace events are recorded. For this example we
+  // are going to use the system-wide tracing service, so that we can see our
+  // app's events in context with system profiling information.
+  args.backends = perfetto::kSystemBackend;
+  args.enable_system_consumer = false;
+
+  perfetto::Tracing::Initialize(args);
+  perfetto::TrackEvent::Register();
+}
+
 Plugin::Plugin() : deviceFullName(getDeviceFullName()), specialSetup(new CPUSpecialSetup) {
+
+    InitializePerfetto();
     set_device_name("CPU");
     // Initialize Xbyak::util::Cpu object on Pcore for hybrid cores machine
     get_executor_manager()->execute_task_by_streams_executor(ov::hint::SchedulingCoreType::PCORE_ONLY, [] {
@@ -137,6 +155,8 @@ Plugin::~Plugin() {
     executor_manager()->clear("CPU");
     executor_manager()->clear("CPUStreamsExecutor");
     executor_manager()->clear("CPUCallbackExecutor");
+    //TEST
+    perfetto::TrackEvent::Flush();
 }
 
 static bool streamsSet(const ov::AnyMap& config) {

@@ -19,6 +19,9 @@
 #include "utils/general_utils.h"
 #include "utils/ngraph_utils.hpp"
 
+//test
+#include "trace_categories.h"
+
 using OvString = ov::element_type_traits<ov::element::string>::value_type;
 
 namespace ov {
@@ -99,6 +102,8 @@ void SyncInferRequest::update_external_tensor_ptrs() {
     }
 }
 
+#include <perfetto.h>
+
 void SyncInferRequest::infer() {
     using namespace openvino::itt;
     OV_ITT_SCOPED_TASK(itt::domains::intel_cpu, m_profiling_task);
@@ -126,6 +131,9 @@ void SyncInferRequest::infer() {
     }
 
     push_input_data();
+
+    // test
+    TRACE_EVENT("test", "CPU Infer");
 
     m_graph->Infer(this);
 
