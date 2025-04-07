@@ -15,10 +15,18 @@ std::string ov::npuw::online::util::getMetaDesc(const std::shared_ptr<ov::Node>&
     ss << ov_node->description() << ' ';
 
     for (const auto& input : ov_node->inputs()) {
-        ss << input.get_element_type() << ' ' << input.get_shape() << ' ';
+        bool is_dynamic = input.get_partial_shape().is_dynamic();
+        auto shape = ov::Shape{0};
+        if (!is_dynamic)
+            shape = input.get_shape();
+        ss << input.get_element_type() << ' ' << shape << ' ';
     }
     for (const auto& output : ov_node->outputs()) {
-        ss << output.get_element_type() << ' ' << output.get_shape() << ' ';
+        bool is_dynamic = output.get_partial_shape().is_dynamic();
+        auto shape = ov::Shape{0};
+        if (!is_dynamic)
+            shape = output.get_shape();
+        ss << output.get_element_type() << ' ' << shape << ' ';
     }
 
     ReadAttributes visitor_node;
