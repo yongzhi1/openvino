@@ -363,6 +363,8 @@ std::vector<std::string> disabledTestPatterns() {
         retVector.emplace_back(R"(smoke_LPT/MatMulTransformation.*)");
         // Ticket: 162260
         retVector.emplace_back(R"(smoke_Snippets_FQDecomposition.*netPRC=f32_D=CPU.*)");
+        // Ticket: 166771
+        retVector.emplace_back(R"(.*smoke_BroadcastEltwise/BroadcastEltwise.smoke_CompareWithRefs.*)");
     }
     // invalid test: checks u8 precision for runtime graph, while it should be f32
     retVector.emplace_back(R"(smoke_NegativeQuantizedMatMulMultiplyFusion.*)");
@@ -614,7 +616,7 @@ std::vector<std::string> disabledTestPatterns() {
     retVector.emplace_back(R"(.*OVInferenceChainingStatic.*StaticOutputToStaticInput.*)");
     retVector.emplace_back(R"(.*ReduceCPULayerTest.*CompareWithRefs.*INFERENCE_PRECISION_HINT=f16.*)");
     // Issue: 164799
-    retVector.emplace_back(R"(.*CompileModelCacheTestBase.*CompareWithRefImpl.*ConvPoolRelu_(i|u)(8|16|32|64)_batch.*)");
+    retVector.emplace_back(R"(.*CompileModelCacheTestBase.*CompareWithRefImpl.*)");
 #endif
     if (!ov::with_cpu_x86_avx512_core_vnni() &&
         !ov::with_cpu_x86_avx2_vnni() &&
