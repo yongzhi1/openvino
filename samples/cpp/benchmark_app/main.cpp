@@ -45,6 +45,7 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
+#include <unistd.h>
 #else
 #error "unsupported OS"
 #endif
@@ -92,6 +93,65 @@ int64_t get_peak_memory_usage() {
 }
 
 #else
+std::string GetStdoutFromCommand(std::string cmd) {
+  std::string data;
+  FILE * stream;
+  const int max_buffer = 128;
+  char buffer[max_buffer];
+  cmd.append(" 2>&1");
+
+  stream = popen(cmd.c_str(), "r");
+
+  if (stream) {
+    while (!feof(stream))
+      if (fgets(buffer, max_buffer, stream) != NULL) data.append(buffer);
+    pclose(stream);
+  }
+  return data;
+}
+
+typedef struct _mem_info {
+    unsigned long rss_mem;
+    unsigned long npu_mem;
+    unsigned long rss_base;
+    unsigned long npu_base;
+    bool b_npu;
+} MEM_CONSUME_INFO;
+
+MEM_CONSUME_INFO mem_info;
+bool exit_mem_read = false;
+std::thread memory_thread_main;
+
+static void get_memory_consumption_info() {
+    while(!exit_mem_read) {
+        unsigned long tSize = 0, resident = 0, share = 0;
+	std::ifstream buffer("/proc/self/statm");
+        buffer >> tSize >> resident >> share;
+        buffer.close();
+        resident *= 4096;
+        if (mem_info.rss_base == -1) mem_info.rss_base = resident;
+        if (resident > mem_info.rss_mem) mem_info.rss_mem = resident;
+        //std::cout << "mem_info.rss_base = " << mem_info.rss_base << " rss_mem = " << mem_info.rss_mem << std::endl;
+        if (mem_info.b_npu) {
+            unsigned long npu_bytes =  stol(GetStdoutFromCommand("cat /sys/devices/pci0000:00/0000:00:0b.0/npu_memory_utilization"));
+            if(mem_info.npu_base == -1)  mem_info.npu_base = npu_bytes;
+            if(npu_bytes > mem_info.npu_mem) mem_info.npu_mem = npu_bytes;
+	    //std::cout << "mem_info.npu_base = " << mem_info.npu_base << " npu_mem = " << mem_info.npu_mem << std::endl;
+        }
+        usleep(1000);
+    }
+}
+
+void init_memory_consumption(bool b_npu) {
+    int tnum;
+    exit_mem_read = false;
+    mem_info.rss_mem = 0;
+    mem_info.npu_mem = 0;
+    mem_info.rss_base = -1;
+    mem_info.npu_base = -1;
+    mem_info.b_npu = b_npu;
+    memory_thread_main = std::thread(&get_memory_consumption_info);
+}
 
 int64_t get_peak_memory_usage() {
     size_t peak_mem_usage_kB = 0;
@@ -396,6 +456,8 @@ int main(int argc, char* argv[]) {
 
         // ----------------- 2. Loading the OpenVINO Runtime
         // -----------------------------------------------------------
+	init_memory_consumption(device_name.find("NPU") == 0);
+
         next_step();
 
         ov::Core core;
@@ -1226,7 +1288,7 @@ int main(int argc, char* argv[]) {
         size_t processedFramesN = 0;
         auto startTime = Time::now();
         auto execTime = std::chrono::duration_cast<ns>(Time::now() - startTime).count();
-
+        uint64_t inferTimeTotal = 0;
         /** Start inference & calculate performance **/
         /** to align number if iterations to guarantee that last infer requests are
          * executed in the same conditions **/
@@ -1264,11 +1326,14 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+	    auto inferStartTime = Time::now();
             if (FLAGS_api == "sync") {
                 inferRequest->infer();
             } else {
                 inferRequest->start_async();
             }
+	    auto inferTime = std::chrono::duration_cast<ns>(Time::now() - inferStartTime).count();
+            inferTimeTotal += inferTime;
             ++iteration;
 
             execTime = std::chrono::duration_cast<ns>(Time::now() - startTime).count();
@@ -1283,6 +1348,9 @@ int main(int argc, char* argv[]) {
 
         // wait the latest inference executions
         inferRequestsQueue.wait_all();
+
+        exit_mem_read = true;
+	memory_thread_main.join();
 
         LatencyMetrics generalLatency(inferRequestsQueue.get_latencies(), "", FLAGS_latency_percentile);
         std::vector<LatencyMetrics> groupLatencies = {};
@@ -1411,6 +1479,10 @@ int main(int argc, char* argv[]) {
         }
 
         slog::info << "Throughput:          " << double_to_string(fps) << " FPS" << slog::endl;
+	slog::info << "Infer only latency: " << inferTimeTotal/iteration/1000000. << " ms" << slog::endl;
+        slog::info << "Max RSS memory cost " << mem_info.rss_mem/1024./1024./1024. << " GB, RSS memory increase " << (mem_info.rss_mem-mem_info.rss_base)/1024./1024./1024. << " GB" << slog::endl;
+        if (device_name.find("NPU") == 0)
+            slog::info << "Max NPU memory cost " << mem_info.npu_mem/1024./1024./1024. << " GB, NPU memory increase " << (mem_info.npu_mem-mem_info.npu_base)/1024./1024./1024. << " GB" << slog::endl;
 
     } catch (const std::exception& ex) {
         slog::err << ex.what() << slog::endl;
