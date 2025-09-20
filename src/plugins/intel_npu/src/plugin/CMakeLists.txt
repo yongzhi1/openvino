@@ -28,6 +28,10 @@ target_link_libraries(${TARGET_NAME}
         openvino_npu_level_zero_backend
 )
 
+if(UNIX)
+    target_link_options(${TARGET_NAME} PRIVATE -Wl,-z,max-page-size=16384)
+endif()
+
 if(NOT BUILD_SHARED_LIBS)
     target_compile_definitions(${TARGET_NAME} PRIVATE OPENVINO_STATIC_LIBRARY)
 endif()

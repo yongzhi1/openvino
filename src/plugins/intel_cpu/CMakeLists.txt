@@ -263,6 +263,10 @@ target_link_libraries(${TARGET_NAME} PRIVATE dnnl
                                              openvino::shape_inference
                                              openvino::snippets)
 
+if(UNIX)
+    target_link_options(${TARGET_NAME} PRIVATE -Wl,-z,max-page-size=16384)
+endif()
+
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 if (ENABLE_MLAS_FOR_CPU)
     target_link_libraries(${TARGET_NAME} PRIVATE mlas)
