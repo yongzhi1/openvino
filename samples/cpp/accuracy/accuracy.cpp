@@ -361,7 +361,9 @@ void load_inputs(ov::InferRequest& request, ov::CompiledModel model, std::string
            file_name = oss.str();
         }
 
-        std::ifstream file(file_name, std::ios::binary);
+    std::cout << "Loading input-" << i << " (" << input_name << ") from " << file_name
+          << std::endl;
+    std::ifstream file(file_name, std::ios::binary);
         if (!file) {
             throw std::ios_base::failure("File " + file_name + " not found");
         }
@@ -577,25 +579,14 @@ void run_model(std::string model_path, std::string device, std::string input_dir
 {
     std::cout << "Inference on device " << device << " started" << std::endl;
 
-    ov::AnyMap cpu_config = {};
-
-    ov::AnyMap npuw_config = {
-	{"NPU_USE_NPUW", "YES"},
-        {"NPUW_DEVICES", "CPU"},
-        {"NPUW_FOLD", "YES"},
-        {"NPUW_FUNCALL_FOR_ALL", "YES"},
-        {"NPUW_WEIGHTS_BANK", "shared"},
-        {"NPUW_ONLINE_KEEP_BLOCKS", "26"},
-        {"NPUW_SLICE_OUT", "YES"},
-        {"NPU_COMPILER_DYNAMIC_QUANTIZATION", "YES"}
-    };
+    ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
 
     ov::Core core;
     ov::CompiledModel compiled_model;
     if (device == "NPU") {
-        compiled_model = core.compile_model(model_path, device, npuw_config);
+        compiled_model = core.compile_model(model_path, device, config);
     } else {
-	compiled_model = core.compile_model(model_path, device, cpu_config);
+	compiled_model = core.compile_model(model_path, device, config);
     }
     ov::InferRequest infer_request = compiled_model.create_infer_request();
 
@@ -613,6 +604,22 @@ void run_model(std::string model_path, std::string device, std::string input_dir
 	std::cout << "compare outputs" << std::endl;
         compare_outputs(infer_request, compiled_model, ref_dir);
     }
+}
+
+static bool has_input_files(const std::string& input_dir) {
+    if (!std::filesystem::exists(input_dir)) {
+        return false;
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(input_dir)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        const auto name = entry.path().filename().string();
+        if (name.rfind("input-", 0) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 #define INPUT_SUBDIR "input"
@@ -637,6 +644,12 @@ int main(int argc, char* argv[]) {
 	return 1;
     }
 
-    run_model(model_path, "CPU", input_dir, ref_dir, ref_dir, false);
+    if (FLAGS_fixed.empty() && !has_input_files(input_dir)) {
+        std::cerr << "No input files found in: " << input_dir << std::endl;
+        std::cerr << "Provide inputs under <folder>/input and pass -f <folder>." << std::endl;
+        return 1;
+    }
+
+    run_model(model_path, "CPU", input_dir, ref_dir, ref_dir, true);
     run_model(model_path, FLAGS_d, input_dir, dev_dir, ref_dir, true);
 }
